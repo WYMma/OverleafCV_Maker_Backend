@@ -1,14 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const { checkDocker } = require('../services/latexService');
+const { checkPdflatex } = require('../services/latexService');
 
 router.get('/', async (req, res) => {
-  const dockerAvailable = await checkDocker();
+  const pdflatexAvailable = await checkPdflatex();
   res.json({ 
     status: "OK", 
     message: "LaTeX compilation service is running",
-    docker: dockerAvailable ? "Available" : "Not available",
-    miktex: dockerAvailable ? "Available via Docker" : "Docker required"
+    pdflatex: pdflatexAvailable ? "Available" : "Not available",
+    latex: pdflatexAvailable ? "Available directly" : "pdflatex required"
   });
 });
 

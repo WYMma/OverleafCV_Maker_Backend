@@ -6,7 +6,10 @@ const config = require('../config/database');
 
 const setupMiddleware = (app) => {
   // Middleware
-  app.use(cors());
+  app.use(cors({
+    origin: ['http://localhost:3000', 'https://overleafcv-maker-backend.onrender.com'],
+    credentials: true
+  }));
   app.use(express.json({ limit: "10mb" }));
   app.use(express.static(config.tempDir));
 
