@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { generateCV, isConfigured } = require('../services/geminiService');
+const { generateSampleCV, isConfigured } = require('../services/geminiService');
 
 router.post('/', async (req, res) => {
   const { jobTitle } = req.body;
@@ -13,7 +13,7 @@ router.post('/', async (req, res) => {
   }
   
   try {
-    const cvData = await generateCV(jobTitle);
+    const cvData = await generateSampleCV(jobTitle);
     res.json({ 
       success: true, 
       data: cvData 

@@ -4,9 +4,9 @@ const path = require("path");
 const { v4: uuidv4 } = require("uuid");
 const config = require('../config/database');
 
-const checkDocker = () => {
+const checkPdflatex = () => {
   return new Promise((resolve) => {
-    exec("docker --version", (error) => {
+    exec("pdflatex --version", (error) => {
       resolve(!error);
     });
   });
@@ -35,26 +35,26 @@ const compileLatex = async (latexCode) => {
   };
 
   try {
-    // Check if Docker is available
-    const dockerAvailable = await checkDocker();
-    if (!dockerAvailable) {
+    // Check if pdflatex is available
+    const pdflatexAvailable = await checkPdflatex();
+    if (!pdflatexAvailable) {
       cleanup();
-      throw new Error("Docker not available. Please install Docker and ensure it is running");
+      throw new Error("pdflatex not available. Please install TeX Live, MiKTeX, or MacTeX");
     }
 
     // Write LaTeX code to file
     fs.writeFileSync(texFile, latexCode);
 
-    // Use Windows-compatible Docker command
-    const dockerCommand = `docker run --rm -v "${tempDir.replace(/\\\\/g, "/")}:/miktex/work" miktex/miktex:essential pdflatex -interaction=nonstopmode -output-directory=/miktex/work ${jobId}.tex`;
+    // Use direct pdflatex command
+    const pdflatexCommand = `pdflatex -interaction=nonstopmode -output-directory="${tempDir}" "${jobId}.tex"`;
     
-    console.log("Executing:", dockerCommand);
+    console.log("Executing:", pdflatexCommand);
     
     return new Promise((resolve, reject) => {
-      exec(dockerCommand, { cwd: tempDir }, (error, stdout, stderr) => {
-        console.log("Docker stdout:", stdout);
-        console.log("Docker stderr:", stderr);
-        console.log("Docker error:", error);
+      exec(pdflatexCommand, { cwd: tempDir }, (error, stdout, stderr) => {
+        console.log("pdflatex stdout:", stdout);
+        console.log("pdflatex stderr:", stderr);
+        console.log("pdflatex error:", error);
         
         if (error) {
           cleanup();
@@ -62,11 +62,11 @@ const compileLatex = async (latexCode) => {
           let errorDetails = stderr || stdout || error.message;
           
           if (stderr.includes("permission denied") || stderr.includes("access denied")) {
-            errorMessage = "Docker permission error";
-            errorDetails = "Please ensure Docker has proper permissions. On Windows, run Docker Desktop as administrator.";
-          } else if (stderr.includes("command not found") || stderr.includes("docker:")) {
-            errorMessage = "Docker command error";
-            errorDetails = "Docker command failed. Please ensure Docker is running properly.";
+            errorMessage = "Permission error";
+            errorDetails = "Please ensure the temp directory has proper write permissions.";
+          } else if (stderr.includes("command not found") || stderr.includes("pdflatex:")) {
+            errorMessage = "pdflatex command error";
+            errorDetails = "pdflatex command failed. Please ensure TeX Live is properly installed.";
           }
           
           return reject(new Error(`${errorMessage}: ${errorDetails}`));
@@ -86,7 +86,7 @@ const compileLatex = async (latexCode) => {
             resolve({
               success: true,
               pdf: pdfBase64,
-              message: "LaTeX compiled successfully using Docker MiKTeX"
+              message: "LaTeX compiled successfully using pdflatex"
             });
           } catch (readError) {
             cleanup();
@@ -94,7 +94,7 @@ const compileLatex = async (latexCode) => {
           }
         } else {
           cleanup();
-          reject(new Error("PDF generation failed: No PDF file was created. Check LaTeX syntax or Docker output."));
+          reject(new Error("PDF generation failed: No PDF file was created. Check LaTeX syntax or pdflatex output."));
         }
       });
     });
@@ -107,5 +107,5 @@ const compileLatex = async (latexCode) => {
 
 module.exports = {
   compileLatex,
-  checkDocker
+  checkPdflatex
 };
