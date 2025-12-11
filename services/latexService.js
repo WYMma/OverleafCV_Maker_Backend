@@ -12,7 +12,15 @@ const checkPdflatex = () => {
   });
 };
 
-const compileLatex = async (latexCode) => {
+const sanitizeFilename = (name) => {
+  if (!name) return 'CV';
+  return name
+    .replace(/[^\w\s-]/g, '') // Remove special characters except spaces and hyphens
+    .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+    .trim() || 'CV';
+};
+
+const compileLatex = async (latexCode, fullName) => {
   if (!latexCode) {
     throw new Error("LaTeX code is required");
   }
@@ -81,11 +89,16 @@ const compileLatex = async (latexCode) => {
             // Convert to base64 for sending to frontend
             const pdfBase64 = pdfBuffer.toString("base64");
             
+            // Generate filename based on full name
+            const sanitizedFullName = sanitizeFilename(fullName);
+            const filename = `${sanitizedFullName} CV.pdf`;
+            
             cleanup();
             
             resolve({
               success: true,
               pdf: pdfBase64,
+              filename: filename,
               message: "LaTeX compiled successfully using pdflatex"
             });
           } catch (readError) {

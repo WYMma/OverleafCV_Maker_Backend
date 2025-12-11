@@ -4,7 +4,8 @@ const { compileLatex } = require('../services/latexService');
 
 router.post('/', async (req, res) => {
   try {
-    const result = await compileLatex(req.body.latexCode);
+    const { latexCode, fullName } = req.body;
+    const result = await compileLatex(latexCode, fullName);
     res.json(result);
   } catch (error) {
     res.status(500).json({
