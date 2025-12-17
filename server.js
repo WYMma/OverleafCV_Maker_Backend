@@ -17,6 +17,7 @@ setupMiddleware(app);
 // Register routes
 app.use('/compile', compileRoutes);
 app.use('/api/generate-cv', generateCVRoutes);
+app.use('/api/extract-cv', require('./routes/extractCV'));
 app.use('/api/enhance', enhanceRoutes);
 app.use('/health', healthRoutes);
 

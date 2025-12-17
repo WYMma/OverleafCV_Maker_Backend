@@ -3,25 +3,48 @@ const config = require('../config/database');
 
 const genAI = config.geminiApiKey ? new GoogleGenAI({ apiKey: config.geminiApiKey }) : null;
 
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+const retryOperation = async (operation, maxRetries = 5, delay = 2000) => {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (i === maxRetries - 1) throw error;
+
+      // Broader check for 503/Overloaded
+      const errString = error.toString() + (error.message || '') + JSON.stringify(error);
+      const isTransient =
+        error.status === 503 ||
+        error.status === 429 ||
+        errString.includes('503') ||
+        errString.includes('overloaded') ||
+        errString.includes('UNAVAILABLE');
+
+      if (!isTransient) throw error;
+
+      console.log(`Gemini API overloaded. Retrying in ${delay}ms... (Attempt ${i + 1}/${maxRetries})`);
+      await sleep(delay);
+      delay *= 2; // Exponential backoff
+    }
+  }
+};
+
 const improveText = async (text, context) => {
   if (!genAI) return text;
-  
-  try {
-    const response = await genAI.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: `You are a professional resume writer. Rewrite the following text to be more professional, impactful, and concise. 
-      Context: ${context}.
-      
-      Text to improve:
-      "${text}"
-      
-      Return ONLY the improved text. Do not add quotes or explanations.`,
-    });
-    return response.text?.trim() || text;
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    return text;
-  }
+
+  return retryOperation(async () => {
+    try {
+      const response = await genAI.models.generateContent({
+        model: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
+        contents: prompt,
+      });
+      return response.text?.trim() || text;
+    } catch (error) {
+      console.error("Gemini API Error:", error);
+      throw error; // Re-throw for retry
+    }
+  });
 };
 
 const generateSampleCV = async (jobTitle) => {
@@ -61,7 +84,7 @@ const generateSampleCV = async (jobTitle) => {
         "endDate": "Present",
         "isCurrent": true,
         "technologies": "Technology 1, Technology 2, Technology 3",
-        "description": "Achieved specific measurable result\nLed initiative that impacted business metrics\nCollaborated with cross-functional teams\nImplemented innovative solutions"
+        "description": "Achieved specific measurable result\\nLed initiative that impacted business metrics\\nCollaborated with cross-functional teams\\nImplemented innovative solutions"
       }
     ],
     "education": [
@@ -100,7 +123,7 @@ const generateSampleCV = async (jobTitle) => {
         "startDate": "YYYY-MM",
         "endDate": "YYYY-MM",
         "isCurrent": false,
-        "description": "Leadership role and responsibilities\nKey achievements and contributions"
+        "description": "Leadership role and responsibilities\\nKey achievements and contributions"
       }
     ],
     "languages": [
@@ -117,130 +140,272 @@ const generateSampleCV = async (jobTitle) => {
   
   Make sure all dates are consistent and realistic. The experience should show career progression. Skills should be relevant to the job title. Technologies should be current and industry-standard.`;
 
-  try {
-    const response = await genAI.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            fullName: { type: Type.STRING },
-            title: { type: Type.STRING },
-            email: { type: Type.STRING },
-            phone: { type: Type.STRING },
-            website: { type: Type.STRING },
-            linkedin: { type: Type.STRING },
-            github: { type: Type.STRING },
-            summary: { type: Type.STRING },
-            skills: { type: Type.STRING },
-            experience: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  company: { type: Type.STRING },
-                  role: { type: Type.STRING },
-                  employmentType: { type: Type.STRING },
-                  location: { type: Type.STRING },
-                  startDate: { type: Type.STRING },
-                  endDate: { type: Type.STRING },
-                  isCurrent: { type: Type.BOOLEAN },
-                  technologies: { type: Type.STRING },
-                  description: { type: Type.STRING }
-                },
-                required: ["company", "role", "location", "startDate", "endDate", "description"]
+  return retryOperation(async () => {
+    try {
+      const response = await genAI.models.generateContent({
+        model: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              fullName: { type: Type.STRING },
+              title: { type: Type.STRING },
+              email: { type: Type.STRING },
+              phone: { type: Type.STRING },
+              website: { type: Type.STRING },
+              linkedin: { type: Type.STRING },
+              github: { type: Type.STRING },
+              summary: { type: Type.STRING },
+              skills: { type: Type.STRING },
+              experience: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    company: { type: Type.STRING },
+                    role: { type: Type.STRING },
+                    employmentType: { type: Type.STRING },
+                    location: { type: Type.STRING },
+                    startDate: { type: Type.STRING },
+                    endDate: { type: Type.STRING },
+                    isCurrent: { type: Type.BOOLEAN },
+                    technologies: { type: Type.STRING },
+                    description: { type: Type.STRING }
+                  },
+                  required: ["company", "role", "location", "startDate", "endDate", "description"]
+                }
+              },
+              education: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    institution: { type: Type.STRING },
+                    degree: { type: Type.STRING },
+                    speciality: { type: Type.STRING },
+                    location: { type: Type.STRING },
+                    startDate: { type: Type.STRING },
+                    endDate: { type: Type.STRING },
+                    isCurrent: { type: Type.BOOLEAN },
+                    year: { type: Type.STRING },
+                    details: { type: Type.STRING }
+                  },
+                  required: ["institution", "degree", "location", "year"]
+                }
+              },
+              certifications: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    provider: { type: Type.STRING },
+                    date: { type: Type.STRING },
+                    details: { type: Type.STRING }
+                  },
+                  required: ["name", "provider", "date"]
+                }
+              },
+              projects: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    technologies: { type: Type.STRING },
+                    link: { type: Type.STRING },
+                    description: { type: Type.STRING }
+                  },
+                  required: ["name", "description"]
+                }
+              },
+              extracurricularActivities: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    organization: { type: Type.STRING },
+                    location: { type: Type.STRING },
+                    startDate: { type: Type.STRING },
+                    endDate: { type: Type.STRING },
+                    isCurrent: { type: Type.BOOLEAN },
+                    description: { type: Type.STRING }
+                  },
+                  required: ["organization", "description"]
+                }
+              },
+              languages: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    proficiency: { type: Type.STRING }
+                  },
+                  required: ["name", "proficiency"]
+                }
               }
             },
-            education: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  institution: { type: Type.STRING },
-                  degree: { type: Type.STRING },
-                  speciality: { type: Type.STRING },
-                  location: { type: Type.STRING },
-                  startDate: { type: Type.STRING },
-                  endDate: { type: Type.STRING },
-                  isCurrent: { type: Type.BOOLEAN },
-                  year: { type: Type.STRING },
-                  details: { type: Type.STRING }
-                },
-                required: ["institution", "degree", "location", "year"]
-              }
-            },
-            certifications: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING },
-                  provider: { type: Type.STRING },
-                  date: { type: Type.STRING },
-                  details: { type: Type.STRING }
-                },
-                required: ["name", "provider", "date"]
-              }
-            },
-            projects: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING },
-                  technologies: { type: Type.STRING },
-                  link: { type: Type.STRING },
-                  description: { type: Type.STRING }
-                },
-                required: ["name", "description"]
-              }
-            },
-            extracurricularActivities: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  organization: { type: Type.STRING },
-                  location: { type: Type.STRING },
-                  startDate: { type: Type.STRING },
-                  endDate: { type: Type.STRING },
-                  isCurrent: { type: Type.BOOLEAN },
-                  description: { type: Type.STRING }
-                },
-                required: ["organization", "description"]
-              }
-            },
-            languages: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING },
-                  proficiency: { type: Type.STRING }
-                },
-                required: ["name", "proficiency"]
-              }
-            }
-          },
-          required: ["fullName", "title", "summary", "skills"]
+            required: ["fullName", "title", "summary", "skills"]
+          }
         }
-      }
-    });
+      });
 
-    const text = response.text;
-    if (!text) throw new Error("No response from AI");
-    
-    return JSON.parse(text);
-  } catch (error) {
-    console.error("Gemini Sample Gen Error:", error);
-    throw error;
-  }
+      const text = response.text;
+      if (!text) throw new Error("No response from AI");
+
+      return JSON.parse(text);
+    } catch (error) {
+      console.error("Gemini Sample Gen Error:", error);
+      throw error;
+    }
+  });
+};
+
+const extractCVData = async (userPrompt) => {
+  if (!genAI) throw new Error("API Key not found");
+
+  const prompt = `Extract structured CV information from the following user description.
+  
+  User Description:
+  "${userPrompt}"
+  
+  Requirements:
+  - Extract all relevant information provided by the user.
+  - If specific fields (like email, phone, dates) are missing, leave them empty or use reasonable placeholders (e.g. "YYYY-MM") only if context implies them.
+  - Do NOT invent specific experiences or skills not mentioned or strongly implied by the user.
+  - Return the response in strict JSON format matching the schema below.
+  `;
+
+  return retryOperation(async () => {
+    try {
+      const response = await genAI.models.generateContent({
+        model: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              fullName: { type: Type.STRING },
+              title: { type: Type.STRING },
+              email: { type: Type.STRING },
+              phone: { type: Type.STRING },
+              website: { type: Type.STRING },
+              linkedin: { type: Type.STRING },
+              github: { type: Type.STRING },
+              summary: { type: Type.STRING },
+              skills: { type: Type.STRING },
+              experience: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    company: { type: Type.STRING },
+                    role: { type: Type.STRING },
+                    employmentType: { type: Type.STRING },
+                    location: { type: Type.STRING },
+                    startDate: { type: Type.STRING },
+                    endDate: { type: Type.STRING },
+                    isCurrent: { type: Type.BOOLEAN },
+                    technologies: { type: Type.STRING },
+                    description: { type: Type.STRING }
+                  },
+                  required: ["company", "role", "description"]
+                }
+              },
+              education: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    institution: { type: Type.STRING },
+                    degree: { type: Type.STRING },
+                    speciality: { type: Type.STRING },
+                    location: { type: Type.STRING },
+                    startDate: { type: Type.STRING },
+                    endDate: { type: Type.STRING },
+                    isCurrent: { type: Type.BOOLEAN },
+                    year: { type: Type.STRING },
+                    details: { type: Type.STRING }
+                  },
+                  required: ["institution", "degree"]
+                }
+              },
+              certifications: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    provider: { type: Type.STRING },
+                    date: { type: Type.STRING },
+                    details: { type: Type.STRING }
+                  },
+                  required: ["name"]
+                }
+              },
+              projects: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    technologies: { type: Type.STRING },
+                    link: { type: Type.STRING },
+                    description: { type: Type.STRING }
+                  },
+                  required: ["name", "description"]
+                }
+              },
+              extracurricularActivities: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    organization: { type: Type.STRING },
+                    location: { type: Type.STRING },
+                    startDate: { type: Type.STRING },
+                    endDate: { type: Type.STRING },
+                    isCurrent: { type: Type.BOOLEAN },
+                    description: { type: Type.STRING }
+                  },
+                  required: ["organization"]
+                }
+              },
+              languages: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    proficiency: { type: Type.STRING }
+                  },
+                  required: ["name"]
+                }
+              }
+            },
+            required: ["fullName", "summary"]
+          }
+        }
+      });
+
+      const text = response.text;
+      if (!text) throw new Error("No response from AI");
+
+      return JSON.parse(text);
+    } catch (error) {
+      console.error("Gemini Extraction Error:", error);
+      throw error;
+    }
+  });
 };
 
 module.exports = {
   improveText,
   generateSampleCV,
+  extractCVData,
   isConfigured: !!genAI
 };
