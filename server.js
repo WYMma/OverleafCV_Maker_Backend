@@ -1,12 +1,17 @@
 const express = require("express");
 const config = require('./config/database');
 const setupMiddleware = require('./middleware/setup');
+const { initializeFirebase } = require('./config/firebaseAdmin');
+
+// Initialize Firebase Admin
+initializeFirebase();
 
 // Routes
 const compileRoutes = require('./routes/compile');
 const generateCVRoutes = require('./routes/generateCV');
 const enhanceRoutes = require('./routes/enhance');
 const healthRoutes = require('./routes/health');
+const cvsRoutes = require('./routes/cvs');
 
 const app = express();
 const PORT = config.port;
@@ -19,6 +24,7 @@ app.use('/compile', compileRoutes);
 app.use('/api/generate-cv', generateCVRoutes);
 app.use('/api/extract-cv', require('./routes/extractCV'));
 app.use('/api/enhance', enhanceRoutes);
+app.use('/api/cvs', cvsRoutes);
 app.use('/health', healthRoutes);
 
 app.listen(PORT, () => {
