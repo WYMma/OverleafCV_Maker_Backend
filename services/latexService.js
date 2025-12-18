@@ -55,20 +55,30 @@ const compileLatex = async (latexCode, fullName) => {
 
     // Use direct pdflatex command
     const pdflatexCommand = `pdflatex -interaction=nonstopmode -output-directory="${tempDir}" "${jobId}.tex"`;
-    
+
     console.log("Executing:", pdflatexCommand);
-    
+
     return new Promise((resolve, reject) => {
       exec(pdflatexCommand, { cwd: tempDir }, (error, stdout, stderr) => {
         console.log("pdflatex stdout:", stdout);
         console.log("pdflatex stderr:", stderr);
         console.log("pdflatex error:", error);
-        
+
         if (error) {
+          let logContent = "";
+          try {
+            if (fs.existsSync(logFile)) {
+              logContent = fs.readFileSync(logFile, "utf8");
+              console.log("LaTeX Log Content:", logContent);
+            }
+          } catch (logErr) {
+            console.error("Failed to read log file:", logErr);
+          }
+
           cleanup();
           let errorMessage = "LaTeX compilation failed";
           let errorDetails = stderr || stdout || error.message;
-          
+
           if (stderr.includes("permission denied") || stderr.includes("access denied")) {
             errorMessage = "Permission error";
             errorDetails = "Please ensure the temp directory has proper write permissions.";
@@ -76,8 +86,8 @@ const compileLatex = async (latexCode, fullName) => {
             errorMessage = "pdflatex command error";
             errorDetails = "pdflatex command failed. Please ensure TeX Live is properly installed.";
           }
-          
-          return reject(new Error(`${errorMessage}: ${errorDetails}`));
+
+          return reject(new Error(`${errorMessage}. Details: ${errorDetails}. Log: ${logContent}`));
         }
 
         // Check if PDF was created
@@ -85,16 +95,16 @@ const compileLatex = async (latexCode, fullName) => {
           try {
             // Read the generated PDF
             const pdfBuffer = fs.readFileSync(pdfFile);
-            
+
             // Convert to base64 for sending to frontend
             const pdfBase64 = pdfBuffer.toString("base64");
-            
+
             // Generate filename based on full name
             const sanitizedFullName = sanitizeFilename(fullName);
             const filename = `${sanitizedFullName} CV.pdf`;
-            
+
             cleanup();
-            
+
             resolve({
               success: true,
               pdf: pdfBase64,
