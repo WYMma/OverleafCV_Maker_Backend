@@ -33,6 +33,20 @@ const retryOperation = async (operation, maxRetries = 5, delay = 2000) => {
 const improveText = async (text, context) => {
   if (!genAI) return text;
 
+  const prompt = `Improve and professionalize the following text for a CV/Resume.
+  
+  Text to improve:
+  "${text}"
+  
+  Context:
+  ${context}
+  
+  Requirements:
+  - Maintain the original meaning and facts.
+  - Use professional, action-oriented language.
+  - Keep it concise and impactful.
+  - Return only the improved text without any preamble or quotes.`;
+
   return retryOperation(async () => {
     try {
       const response = await genAI.models.generateContent({
@@ -267,16 +281,38 @@ const generateSampleCV = async (jobTitle) => {
 const extractCVData = async (userPrompt) => {
   if (!genAI) throw new Error("API Key not found");
 
-  const prompt = `Extract structured CV information from the following user description.
+  const prompt = `Extract structured professional CV information from the following user description. 
+  Map every piece of information to its appropriate field in the JSON schema.
   
   User Description:
   "${userPrompt}"
   
   Requirements:
-  - Extract all relevant information provided by the user.
-  - If specific fields (like email, phone, dates) are missing, leave them empty or use reasonable placeholders (e.g. "YYYY-MM") only if context implies them.
-  - Do NOT invent specific experiences or skills not mentioned or strongly implied by the user.
-  - Return the response in strict JSON format matching the schema below.
+  - DO NOT return the original description as a single field. Break it down.
+  - Extract Full Name, Job Title, Summary, and Skills.
+  - Parse Experiences (company, role, dates, description).
+  - Parse Education (institution, degree, dates).
+  - If specific fields are missing, leave them empty strings or empty arrays.
+  - Return ONLY a valid JSON object matching the schema below.
+  
+  JSON Schema to follow:
+  {
+    "fullName": "string",
+    "title": "string",
+    "email": "string",
+    "phone": "string",
+    "website": "string",
+    "linkedin": "string",
+    "github": "string",
+    "summary": "string",
+    "skills": "string",
+    "experience": [{"company": "string", "role": "string", "description": "string", ...}],
+    "education": [{"institution": "string", "degree": "string", ...}],
+    "certifications": [...],
+    "projects": [...],
+    "extracurricularActivities": [...],
+    "languages": [...]
+  }
   `;
 
   return retryOperation(async () => {
