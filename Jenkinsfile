@@ -3,8 +3,6 @@ pipeline {
 
     environment {
         // Retrieve the Render Hook URL from Jenkins Credentials.
-        // You must create a 'Secret Text' credential in Jenkins with the ID 'render-deploy-hook-url'
-        // containing the value: https://api.render.com/deploy/srv-d4tavhe3jp1c73eb4re0?key=7LDGaY5M-OE
         RENDER_HOOK_URL = credentials('render-deploy-hook-url')
     }
 
