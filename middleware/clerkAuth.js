@@ -8,7 +8,7 @@ const verifyClerkToken = async (req, res, next) => {
     try {
         // LOUD check for placeholder secret key
         const secretKey = process.env.CLERK_SECRET_KEY;
-        if (!secretKey || secretKey === 'your_clerk_secret_key_here') {
+        if (!secretKey) {
             console.error('\n!!! CRITICAL ERROR: CLERK_SECRET_KEY is MISSING or using a PLACEHOLDER in .env !!!');
             console.error('Please get your Secret Key from the Clerk Dashboard: https://dashboard.clerk.com\n');
             return res.status(500).json({ error: 'Auth configuration error in backend' });
